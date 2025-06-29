@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import authService from '../services/authService';
 
-export default function Login({ onLogin, switchToRegister }) {
+const Login = memo(({ onLogin, switchToRegister }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -9,7 +9,7 @@ export default function Login({ onLogin, switchToRegister }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -22,16 +22,16 @@ export default function Login({ onLogin, switchToRegister }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData.email, formData.password, onLogin]);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
+  const handleChange = useCallback((e) => {
+    setFormData(prev => ({
+      ...prev,
       [e.target.name]: e.target.value
-    });
-  };
+    }));
+  }, []);
 
-  const demoLogin = (userType) => {
+  const demoLogin = useCallback((userType) => {
     const demoAccounts = {
       developer: { email: 'john.doe@email.com', password: 'password123' },
       designer: { email: 'sarah.wilson@email.com', password: 'password123' },
@@ -47,7 +47,7 @@ export default function Login({ onLogin, switchToRegister }) {
         .then(result => onLogin(result.user))
         .catch(err => setError(err.message));
     }, 100);
-  };
+  }, [onLogin]);
 
   return (
     <div style={styles.container}>
@@ -125,7 +125,9 @@ export default function Login({ onLogin, switchToRegister }) {
       </div>
     </div>
   );
-}
+});
+
+export default Login;
 
 const styles = {
   container: {

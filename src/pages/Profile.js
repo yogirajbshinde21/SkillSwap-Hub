@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import skillService from '../services/skillService';
+import skillVerificationService from '../services/skillVerificationService';
+import SkillInput from '../components/SkillInput';
+import SkillProfile from '../components/SkillProfile';
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [editing, setEditing] = useState(false);
   const [userPosts, setUserPosts] = useState([]);
+  const [userSkills, setUserSkills] = useState([]);
+  const [showSkillInput, setShowSkillInput] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'skills', 'posts'
   const [formData, setFormData] = useState({
     name: user.name || '',
     bio: user.bio || '',
@@ -17,11 +23,33 @@ export default function Profile() {
 
   useEffect(() => {
     loadUserPosts();
+    loadUserSkills();
   }, [user]);
 
   const loadUserPosts = () => {
     const posts = skillService.getPostsByUser(user.id);
     setUserPosts(posts);
+  };
+
+  const loadUserSkills = () => {
+    const skills = JSON.parse(localStorage.getItem('userSkills') || '[]');
+    const mySkills = skills.filter(skill => skill.userId === user.id);
+    setUserSkills(mySkills);
+  };
+
+  const handleSkillAdd = (skillData) => {
+    const skills = JSON.parse(localStorage.getItem('userSkills') || '[]');
+    const newSkill = {
+      ...skillData,
+      id: Date.now().toString(),
+      userId: user.id
+    };
+    
+    skills.push(newSkill);
+    localStorage.setItem('userSkills', JSON.stringify(skills));
+    
+    setUserSkills(prev => [...prev, newSkill]);
+    setShowSkillInput(false);
   };
 
   const handleSubmit = (e) => {
@@ -144,6 +172,29 @@ export default function Profile() {
                     <span style={styles.stat}>🤝 {user.totalExchanges || 0} exchanges</span>
                     <span style={styles.stat}>📅 Joined {new Date(user.joinedDate).toLocaleDateString()}</span>
                   </div>
+                  
+                  {/* Verification Status */}
+                  {(() => {
+                    const verificationStatus = skillVerificationService.getUserVerificationStatus(userSkills);
+                    return (
+                      <div style={styles.verificationStatus}>
+                        <span style={{
+                          ...styles.verificationBadge,
+                          backgroundColor: verificationStatus.color,
+                          color: 'white'
+                        }}>
+                          {verificationStatus.badge}
+                        </span>
+                        <span style={styles.verificationText}>
+                          {verificationStatus.status === 'github-verified' && 'Your GitHub profile has been verified'}
+                          {verificationStatus.status === 'quiz-verified' && 'You have completed skill quizzes'}
+                          {verificationStatus.status === 'verified' && 'You have verified skills'}
+                          {verificationStatus.status === 'unverified' && 'Complete skill verification to build trust'}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  
                   <button 
                     onClick={() => setEditing(true)}
                     style={styles.editButton}
@@ -156,140 +207,162 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Skills Section */}
-        <div style={styles.skillsSection}>
-          <div style={styles.skillsGrid}>
-            <div style={styles.skillCategory}>
-              <h3 style={styles.skillCategoryTitle}>Skills I Offer</h3>
-              {editing ? (
-                <input
-                  type="text"
-                  name="skillsOffered"
-                  value={formData.skillsOffered}
-                  onChange={handleChange}
-                  style={styles.input}
-                  placeholder="Skills you can teach (comma separated)"
-                />
-              ) : (
-                <div style={styles.skillTags}>
-                  {user.skillsOffered?.length > 0 ? (
-                    user.skillsOffered.map(skill => (
-                      <span key={skill} style={styles.skillTag}>
-                        {skill}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={styles.noSkills}>No skills added yet</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div style={styles.skillCategory}>
-              <h3 style={styles.skillCategoryTitle}>Skills I Want to Learn</h3>
-              {editing ? (
-                <input
-                  type="text"
-                  name="skillsWanted"
-                  value={formData.skillsWanted}
-                  onChange={handleChange}
-                  style={styles.input}
-                  placeholder="Skills you want to learn (comma separated)"
-                />
-              ) : (
-                <div style={styles.skillTags}>
-                  {user.skillsWanted?.length > 0 ? (
-                    user.skillsWanted.map(skill => (
-                      <span key={skill} style={styles.skillTag}>
-                        {skill}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={styles.noSkills}>No skills added yet</span>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Tabs Navigation */}
+        <div style={styles.tabs}>
+          <button 
+            onClick={() => setActiveTab('profile')}
+            style={{
+              ...styles.tabButton,
+              ...(activeTab === 'profile' ? styles.activeTab : {})
+            }}
+          >
+            Profile
+          </button>
+          <button 
+            onClick={() => setActiveTab('skills')}
+            style={{
+              ...styles.tabButton,
+              ...(activeTab === 'skills' ? styles.activeTab : {})
+            }}
+          >
+            Skills
+          </button>
+          <button 
+            onClick={() => setActiveTab('posts')}
+            style={{
+              ...styles.tabButton,
+              ...(activeTab === 'posts' ? styles.activeTab : {})
+            }}
+          >
+            Posts
+          </button>
         </div>
 
-        {/* Posts Section */}
-        <div style={styles.postsSection}>
-          <div style={styles.sectionHeader}>
-            <h2 style={styles.sectionTitle}>My Posts ({userPosts.length})</h2>
+        {/* Active Tab Content */}
+        {activeTab === 'profile' && (
+          <div style={styles.profileContent}>
+            {/* Profile details here (same as above) */}
           </div>
+        )}
 
-          {userPosts.length === 0 ? (
-            <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>📝</div>
-              <h3>No posts yet</h3>
-              <p>Share your skills with the community by creating your first post!</p>
-              <a href="/post" style={styles.createPostButton}>
-                Create Your First Post
-              </a>
+        {activeTab === 'skills' && (
+          <div style={styles.skillsContent}>
+            <h2 style={styles.sectionTitle}>My Skills</h2>
+
+            <button 
+              onClick={() => setShowSkillInput(true)}
+              style={styles.addSkillButton}
+            >
+              + Add New Skill
+            </button>
+
+            {showSkillInput && (
+              <SkillInput 
+                onSkillAdd={handleSkillAdd}
+                onCancel={() => setShowSkillInput(false)}
+                style={styles.skillInput}
+              />
+            )}
+
+            <div style={styles.skillsList}>
+              {userSkills.length === 0 ? (
+                <p style={styles.noSkillsMessage}>No skills added yet. Add some skills!</p>
+              ) : (
+                userSkills.map(skill => (
+                  <SkillProfile 
+                    key={skill.id}
+                    skill={skill}
+                    onDelete={() => {
+                      const updatedSkills = userSkills.filter(s => s.id !== skill.id);
+                      setUserSkills(updatedSkills);
+                      localStorage.setItem('userSkills', JSON.stringify(updatedSkills));
+                    }}
+                    style={styles.skillProfile}
+                  />
+                ))
+              )}
             </div>
-          ) : (
-            <div style={styles.postsGrid}>
-              {userPosts.map(post => (
-                <div key={post.id} style={styles.postCard}>
-                  <div style={styles.postHeader}>
-                    <h3 style={styles.postTitle}>{post.title}</h3>
-                    <div style={styles.postActions}>
-                      <span style={styles.postStatus}>{post.status}</span>
-                      <button 
-                        onClick={() => deletePost(post.id)}
-                        style={styles.deleteButton}
-                      >
-                        🗑️
-                      </button>
+          </div>
+        )}
+
+        {activeTab === 'posts' && (
+          <div style={styles.postsSection}>
+            <div style={styles.sectionHeader}>
+              <h2 style={styles.sectionTitle}>My Posts ({userPosts.length})</h2>
+            </div>
+
+            {userPosts.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>📝</div>
+                <h3>No posts yet</h3>
+                <p>Share your skills with the community by creating your first post!</p>
+                <a href="/post" style={styles.createPostButton}>
+                  Create Your First Post
+                </a>
+              </div>
+            ) : (
+              <div style={styles.postsGrid}>
+                {userPosts.map(post => (
+                  <div key={post.id} style={styles.postCard}>
+                    <div style={styles.postHeader}>
+                      <h3 style={styles.postTitle}>{post.title}</h3>
+                      <div style={styles.postActions}>
+                        <span style={styles.postStatus}>{post.status}</span>
+                        <button 
+                          onClick={() => deletePost(post.id)}
+                          style={styles.deleteButton}
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                  </div>
 
-                  <p style={styles.postDescription}>
-                    {post.description.length > 150 
-                      ? `${post.description.substring(0, 150)}...` 
-                      : post.description
-                    }
-                  </p>
+                    <p style={styles.postDescription}>
+                      {post.description.length > 150 
+                        ? `${post.description.substring(0, 150)}...` 
+                        : post.description
+                      }
+                    </p>
 
-                  <div style={styles.postSkills}>
-                    <div style={styles.skillRow}>
-                      <span style={styles.skillLabel}>📚 I can teach:</span>
-                      <span style={styles.skillValue}>{post.skillOffered}</span>
+                    <div style={styles.postSkills}>
+                      <div style={styles.skillRow}>
+                        <span style={styles.skillLabel}>📚 I can teach:</span>
+                        <span style={styles.skillValue}>{post.skillOffered}</span>
+                      </div>
+                      <div style={styles.skillRow}>
+                        <span style={styles.skillLabel}>🎯 I want to learn:</span>
+                        <span style={styles.skillValue}>{post.skillWanted}</span>
+                      </div>
                     </div>
-                    <div style={styles.skillRow}>
-                      <span style={styles.skillLabel}>🎯 I want to learn:</span>
-                      <span style={styles.skillValue}>{post.skillWanted}</span>
+
+                    <div style={styles.postMeta}>
+                      <span style={styles.metaItem}>📂 {post.category}</span>
+                      <span style={styles.metaItem}>📊 {post.difficulty}</span>
+                      <span style={styles.metaItem}>💻 {post.format}</span>
                     </div>
-                  </div>
 
-                  <div style={styles.postMeta}>
-                    <span style={styles.metaItem}>📂 {post.category}</span>
-                    <span style={styles.metaItem}>📊 {post.difficulty}</span>
-                    <span style={styles.metaItem}>💻 {post.format}</span>
-                  </div>
-
-                  {post.tags && post.tags.length > 0 && (
-                    <div style={styles.tags}>
-                      {post.tags.map(tag => (
-                        <span key={tag} style={styles.tag}>#{tag}</span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div style={styles.postFooter}>
-                    <span style={styles.postDate}>
-                      Created {getTimeAgo(post.createdAt)}
-                    </span>
-                    {post.duration && (
-                      <span style={styles.duration}>⏱️ {post.duration}</span>
+                    {post.tags && post.tags.length > 0 && (
+                      <div style={styles.tags}>
+                        {post.tags.map(tag => (
+                          <span key={tag} style={styles.tag}>#{tag}</span>
+                        ))}
+                      </div>
                     )}
+
+                    <div style={styles.postFooter}>
+                      <span style={styles.postDate}>
+                        Created {getTimeAgo(post.createdAt)}
+                      </span>
+                      {post.duration && (
+                        <span style={styles.duration}>⏱️ {post.duration}</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -383,6 +456,28 @@ const styles = {
     fontSize: '14px',
     color: '#666'
   },
+  verificationStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '20px',
+    padding: '12px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px',
+    border: '1px solid #e9ecef'
+  },
+  verificationBadge: {
+    padding: '4px 12px',
+    borderRadius: '16px',
+    fontSize: '12px',
+    fontWeight: '600',
+    whiteSpace: 'nowrap'
+  },
+  verificationText: {
+    fontSize: '14px',
+    color: '#666',
+    flex: 1
+  },
   editButton: {
     padding: '12px 24px',
     backgroundColor: '#667eea',
@@ -437,46 +532,78 @@ const styles = {
     cursor: 'pointer',
     fontWeight: '500'
   },
-  skillsSection: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '12px',
-    marginBottom: '30px',
-    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
+  tabs: {
+    display: 'flex',
+    borderBottom: '2px solid #e9ecef',
+    marginTop: '20px',
+    marginBottom: '20px'
   },
-  skillsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-    gap: '30px'
+  tabButton: {
+    padding: '12px 24px',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '500',
+    color: '#6c757d',
+    borderBottom: '3px solid transparent',
+    transition: 'all 0.3s ease'
   },
-  skillCategory: {
+  activeTab: {
+    color: '#007bff',
+    borderBottomColor: '#007bff'
+  },
+  tabContent: {
+    minHeight: '400px'
+  },
+  profileTab: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '15px'
+    gap: '20px'
   },
-  skillCategoryTitle: {
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: '0'
+  skillsTab: {
+    // Styles for skills tab
   },
-  skillTags: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '8px'
+  postsTab: {
+    // Styles for posts tab
   },
-  skillTag: {
-    padding: '6px 12px',
-    backgroundColor: '#f0f8ff',
-    color: '#667eea',
-    borderRadius: '20px',
+  addButton: {
+    padding: '10px 20px',
+    borderRadius: '6px',
+    border: 'none',
+    color: 'white',
+    cursor: 'pointer',
     fontSize: '14px',
-    fontWeight: '500'
+    fontWeight: '500',
+    transition: 'background-color 0.3s ease'
   },
-  noSkills: {
+  skillsContent: {
+    // Styles for skills content tab
+  },
+  addSkillButton: {
+    padding: '10px 20px',
+    backgroundColor: '#28a745',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '500',
+    marginBottom: '20px'
+  },
+  skillInput: {
+    marginBottom: '20px'
+  },
+  skillsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  noSkillsMessage: {
     color: '#999',
     fontStyle: 'italic',
-    fontSize: '14px'
+    fontSize: '14px',
+    textAlign: 'center',
+    marginTop: '10px'
   },
   postsSection: {
     backgroundColor: 'white',

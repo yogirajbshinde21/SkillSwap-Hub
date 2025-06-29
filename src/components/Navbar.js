@@ -1,30 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo, useEffect, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import messageService from '../services/messageService';
 
-export default function Navbar() {
+const Navbar = memo(() => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Get unread message count
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       const count = messageService.getUnreadCount();
       setUnreadCount(count);
     }
   }, [user]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     setShowDropdown(false);
-  };
+  }, [logout]);
 
-  const isActive = (path) => {
+  const isActive = useCallback((path) => {
     return location.pathname === path;
-  };
+  }, [location.pathname]);
+
+  const toggleDropdown = useCallback(() => {
+    setShowDropdown(prev => !prev);
+  }, []);
+
+  const navLinkStyle = useCallback((path) => {
+    return isActive(path) ? {...styles.navLink, ...styles.activeLink} : styles.navLink;
+  }, [isActive]);
 
   if (!user) {
     return null; // Don't show navbar when not authenticated
@@ -40,25 +48,25 @@ export default function Navbar() {
         <div style={styles.navLinks}>
           <Link 
             to="/" 
-            style={isActive('/') ? {...styles.navLink, ...styles.activeLink} : styles.navLink}
+            style={navLinkStyle('/')}
           >
             Home
           </Link>
           <Link 
             to="/dashboard" 
-            style={isActive('/dashboard') ? {...styles.navLink, ...styles.activeLink} : styles.navLink}
+            style={navLinkStyle('/dashboard')}
           >
             Dashboard
           </Link>
           <Link 
             to="/browse" 
-            style={isActive('/browse') ? {...styles.navLink, ...styles.activeLink} : styles.navLink}
+            style={navLinkStyle('/browse')}
           >
             Browse Skills
           </Link>
           <Link 
             to="/post" 
-            style={isActive('/post') ? {...styles.navLink, ...styles.activeLink} : styles.navLink}
+            style={navLinkStyle('/post')}
           >
             Post Skill
           </Link>
@@ -83,7 +91,7 @@ export default function Navbar() {
             <span style={styles.userName}>{user.name}</span>
             <div style={styles.dropdown}>
               <button 
-                onClick={() => setShowDropdown(!showDropdown)}
+                onClick={toggleDropdown}
                 style={styles.dropdownButton}
               >
                 ▼
@@ -111,7 +119,9 @@ export default function Navbar() {
       </div>
     </nav>
   );
-}
+});
+
+export default Navbar;
 
 const styles = {
   nav: {

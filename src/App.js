@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Login from './components/Login';
@@ -14,7 +14,7 @@ import Navbar from './components/Navbar';
 import LoadingSpinner from './components/LoadingSpinner';
 
 // Protected Route Component
-function ProtectedRoute({ children }) {
+const ProtectedRoute = memo(({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   
   if (loading) {
@@ -22,33 +22,36 @@ function ProtectedRoute({ children }) {
   }
   
   return isAuthenticated ? children : <Navigate to="/auth" />;
-}
+});
 
 // Auth Wrapper Component
-function AuthWrapper() {
+const AuthWrapper = memo(() => {
   const [isLogin, setIsLogin] = useState(true);
   const { login, register } = useAuth();
 
-  const handleLogin = (userData) => {
+  const handleLogin = useCallback((userData) => {
     login(userData);
-  };
+  }, [login]);
 
-  const handleRegister = (userData) => {
+  const handleRegister = useCallback((userData) => {
     register(userData);
-  };
+  }, [register]);
+
+  const switchToRegister = useCallback(() => setIsLogin(false), []);
+  const switchToLogin = useCallback(() => setIsLogin(true), []);
 
   return isLogin ? (
     <Login 
       onLogin={handleLogin} 
-      switchToRegister={() => setIsLogin(false)} 
+      switchToRegister={switchToRegister} 
     />
   ) : (
     <Register 
       onRegister={handleRegister} 
-      switchToLogin={() => setIsLogin(true)} 
+      switchToLogin={switchToLogin} 
     />
   );
-}
+});
 
 // Main App Component
 function AppContent() {

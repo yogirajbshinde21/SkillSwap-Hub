@@ -103,53 +103,67 @@ class AuthService {
   }
 
   // User registration
-  register(userData) {
-    const users = this.getUsers();
-    
-    // Check if email already exists
-    if (users.find(user => user.email === userData.email)) {
-      throw new Error('Email already exists');
-    }
+  async register(userData) {
+    return new Promise((resolve, reject) => {
+      try {
+        const users = this.getUsers();
+        
+        // Check if email already exists
+        if (users.find(user => user.email === userData.email)) {
+          reject(new Error('Email already exists'));
+          return;
+        }
 
-    const newUser = {
-      id: Date.now().toString(),
-      email: userData.email,
-      password: userData.password,
-      name: userData.name,
-      bio: userData.bio || '',
-      avatar: userData.avatar || '👤',
-      skillsOffered: userData.skillsOffered || [],
-      skillsWanted: userData.skillsWanted || [],
-      location: userData.location || '',
-      rating: 5.0,
-      totalExchanges: 0,
-      joinedDate: new Date().toISOString(),
-      isOnline: false
-    };
+        const newUser = {
+          id: Date.now().toString(),
+          email: userData.email,
+          password: userData.password,
+          name: userData.name,
+          bio: userData.bio || '',
+          avatar: userData.avatar || '👤',
+          skillsOffered: userData.skillsOffered || [],
+          skillsWanted: userData.skillsWanted || [],
+          location: userData.location || '',
+          rating: 5.0,
+          totalExchanges: 0,
+          joinedDate: new Date().toISOString(),
+          isOnline: false
+        };
 
-    users.push(newUser);
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    return { success: true, user: this.sanitizeUser(newUser) };
+        users.push(newUser);
+        localStorage.setItem('users', JSON.stringify(users));
+        
+        resolve({ success: true, user: this.sanitizeUser(newUser) });
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   // User login
-  login(email, password) {
-    const users = this.getUsers();
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (!user) {
-      throw new Error('Invalid email or password');
-    }
+  async login(email, password) {
+    return new Promise((resolve, reject) => {
+      try {
+        const users = this.getUsers();
+        const user = users.find(u => u.email === email && u.password === password);
+        
+        if (!user) {
+          reject(new Error('Invalid email or password'));
+          return;
+        }
 
-    // Update user's online status
-    user.isOnline = true;
-    this.updateUser(user);
+        // Update user's online status
+        user.isOnline = true;
+        this.updateUser(user);
 
-    // Store current session
-    localStorage.setItem('currentUser', JSON.stringify(this.sanitizeUser(user)));
-    
-    return { success: true, user: this.sanitizeUser(user) };
+        // Store current session
+        localStorage.setItem('currentUser', JSON.stringify(this.sanitizeUser(user)));
+        
+        resolve({ success: true, user: this.sanitizeUser(user) });
+      } catch (error) {
+        reject(error);
+      }
+    });
   }
 
   // User logout

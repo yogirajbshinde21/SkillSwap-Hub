@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { memo } from 'react';
 
-export default function LoadingSpinner({ message = 'Loading...' }) {
+const LoadingSpinner = memo(({ message = 'Loading...' }) => {
   return (
     <div style={styles.container} className="fade-in">
       <div style={styles.spinner}></div>
       <p style={styles.text}>{message}</p>
     </div>
   );
-}
+});
+
+export default LoadingSpinner;
 
 const styles = {
   container: {

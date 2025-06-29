@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import skillService from '../services/skillService';
 import messageService from '../services/messageService';
+import skillVerificationService from '../services/skillVerificationService';
 
 export default function Browse() {
   const { user } = useAuth();
@@ -12,12 +13,14 @@ export default function Browse() {
   const [filters, setFilters] = useState({
     category: '',
     difficulty: '',
-    format: ''
+    format: '',
+    verificationLevel: '' // New filter for verification level
   });
   const [loading, setLoading] = useState(true);
   const [showContactModal, setShowContactModal] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [contactMessage, setContactMessage] = useState('');
+  const [userSkills, setUserSkills] = useState([]);
 
   useEffect(() => {
     loadPosts();
@@ -27,10 +30,97 @@ export default function Browse() {
     filterPosts();
   }, [posts, searchQuery, filters]);
 
+  // Reload posts when skills data changes (for real-time updates)
+  useEffect(() => {
+    const handleStorageChange = () => {
+      loadPosts();
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
+
+  const loadUserSkills = () => {
+    const skills = JSON.parse(localStorage.getItem('userSkills') || '[]');
+    setUserSkills(skills);
+  };
+
   const loadPosts = async () => {
     try {
       const allPosts = skillService.searchPosts('', {});
-      setPosts(allPosts);
+      // Load all user skills data to check verification status
+      const allUserSkills = JSON.parse(localStorage.getItem('userSkills') || '[]');
+      
+      // Enhance posts with skill verification data
+      const enhancedPosts = allPosts.map(post => {
+        const authorSkills = allUserSkills.filter(skill => skill.userId === post.userId);
+        
+        // Get user's overall verification status based on ALL their skills
+        const userVerificationStatus = skillVerificationService.getUserVerificationStatus(authorSkills);
+        
+        // Find the specific skill being offered
+        const relevantSkill = authorSkills.find(skill => 
+          skill.name.toLowerCase() === post.skillOffered.toLowerCase()
+        );
+        
+        // Calculate verification status - prioritize overall user verification
+        let authorVerification = null;
+        
+        // Check if user has GitHub verification for ANY skill
+        const hasGitHubVerification = skillVerificationService.hasGitHubVerification(authorSkills);
+        
+        // Debug logging
+        if (authorSkills.length > 0) {
+          console.log(`User ${post.userId} skills:`, authorSkills);
+          console.log(`Has GitHub verification:`, hasGitHubVerification);
+          console.log(`User verification status:`, userVerificationStatus);
+        }
+        
+        if (hasGitHubVerification || userVerificationStatus.status.includes('verified')) {
+          // User is verified based on their overall verification status
+          authorVerification = {
+            trustScore: relevantSkill ? 
+              skillVerificationService.calculateTrustScore(relevantSkill.verification || {}) : 
+              75, // Higher default trust score for verified users
+            verificationLevel: userVerificationStatus.level,
+            isVerified: true,
+            hasGitHubVerification: hasGitHubVerification,
+            verificationMethod: hasGitHubVerification ? 'github' : 
+              (userVerificationStatus.status.split('-')[0] || 'verified'),
+            userVerificationStatus: userVerificationStatus
+          };
+        } else if (relevantSkill && relevantSkill.verification) {
+          // Fall back to specific skill verification if no overall verification
+          const skillTrustScore = skillVerificationService.calculateTrustScore(relevantSkill.verification);
+          const skillIsVerified = (relevantSkill.verification.confidence || 0) > 0.6;
+          
+          authorVerification = {
+            trustScore: skillTrustScore,
+            verificationLevel: skillVerificationService.getVerificationLevel(relevantSkill.verification.confidence || 0),
+            isVerified: skillIsVerified,
+            hasGitHubVerification: false,
+            verificationMethod: relevantSkill.verification.verificationMethod || 'self',
+            userVerificationStatus: userVerificationStatus
+          };
+        } else {
+          // No verification
+          authorVerification = {
+            trustScore: 30,
+            verificationLevel: 'unverified',
+            isVerified: false,
+            hasGitHubVerification: false,
+            verificationMethod: 'self',
+            userVerificationStatus: userVerificationStatus
+          };
+        }
+        
+        return {
+          ...post,
+          authorVerification
+        };
+      });
+      
+      setPosts(enhancedPosts);
     } catch (error) {
       console.error('Error loading posts:', error);
     } finally {
@@ -43,6 +133,26 @@ export default function Browse() {
     
     // Remove current user's posts
     filtered = filtered.filter(post => post.userId !== user.id);
+    
+    // Apply verification level filtering
+    if (filters.verificationLevel) {
+      filtered = filtered.filter(post => {
+        if (!post.authorVerification) return filters.verificationLevel === 'low';
+        
+        switch (filters.verificationLevel) {
+          case 'verified':
+            return post.authorVerification.isVerified;
+          case 'high':
+            return post.authorVerification.trustScore >= 80;
+          case 'medium':
+            return post.authorVerification.trustScore >= 60;
+          case 'low':
+            return post.authorVerification.trustScore < 60;
+          default:
+            return true;
+        }
+      });
+    }
     
     setFilteredPosts(filtered);
   };
@@ -127,7 +237,6 @@ export default function Browse() {
             <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
             <option value="Advanced">Advanced</option>
-            <option value="All Levels">All Levels</option>
           </select>
 
           <select
@@ -138,8 +247,30 @@ export default function Browse() {
             <option value="">All Formats</option>
             <option value="Online">Online</option>
             <option value="In-person">In-person</option>
-            <option value="Both">Both</option>
+            <option value="Hybrid">Hybrid</option>
           </select>
+
+          {/* NEW: Verification Level Filter */}
+          <select
+            value={filters.verificationLevel}
+            onChange={(e) => setFilters({...filters, verificationLevel: e.target.value})}
+            style={{...styles.filterSelect, borderColor: '#28a745', backgroundColor: '#f8fff8'}}
+          >
+            <option value="">All Verification Levels</option>
+            <option value="verified">✅ Verified Skills Only</option>
+            <option value="high">🔥 High Trust (80%+)</option>
+            <option value="medium">⭐ Medium Trust (60%+)</option>
+            <option value="low">📝 Basic Verification</option>
+          </select>
+        </div>
+
+        {/* Verification Legend */}
+        <div style={styles.verificationLegend}>
+          <span style={styles.legendTitle}>🛡️ Verification Levels:</span>
+          <span style={styles.legendItem}>✅ Quiz Verified</span>
+          <span style={styles.legendItem}>🐙 GitHub Verified</span>
+          <span style={styles.legendItem}>💼 Portfolio Verified</span>
+          <span style={styles.legendItem}>✍️ Self-Assessed</span>
         </div>
       </div>
 
@@ -176,6 +307,12 @@ export default function Browse() {
                       </Link>
                       <div style={styles.postMeta}>
                         {getTimeAgo(post.createdAt)} • {post.category}
+                        {/* Show verification status in meta */}
+                        {post.authorVerification && (
+                          <span style={{ marginLeft: '8px' }}>
+                            • Trust: {post.authorVerification.trustScore}%
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -186,6 +323,25 @@ export default function Browse() {
                     <span style={styles.formatBadge}>
                       {post.format}
                     </span>
+                    {/* Enhanced verification badges */}
+                    {post.authorVerification?.userVerificationStatus ? (
+                      <span style={{
+                        ...styles.verificationBadge,
+                        backgroundColor: post.authorVerification.userVerificationStatus.color,
+                        color: 'white'
+                      }}>
+                        {post.authorVerification.userVerificationStatus.badge}
+                        {post.authorVerification.trustScore && ` (${post.authorVerification.trustScore}%)`}
+                      </span>
+                    ) : (
+                      <span style={{
+                        ...styles.verificationBadge,
+                        backgroundColor: '#6c757d',
+                        color: 'white'
+                      }}>
+                        ❓ Unverified
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -340,6 +496,30 @@ const styles = {
     outline: 'none',
     backgroundColor: 'white'
   },
+  verificationLegend: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    marginTop: '10px',
+    padding: '8px 12px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
+    fontSize: '12px',
+    flexWrap: 'wrap'
+  },
+  legendTitle: {
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#333'
+  },
+  legendItem: {
+    fontSize: '12px',
+    color: '#666',
+    padding: '2px 6px',
+    backgroundColor: 'white',
+    borderRadius: '4px',
+    border: '1px solid #dee2e6'
+  },
   results: {
     maxWidth: '1200px',
     margin: '0 auto'
@@ -432,6 +612,13 @@ const styles = {
     borderRadius: '12px',
     fontSize: '12px',
     fontWeight: '500'
+  },
+  verificationBadge: {
+    padding: '4px 8px',
+    borderRadius: '12px',
+    fontSize: '11px',
+    fontWeight: '500',
+    border: '1px solid transparent'
   },
   postTitle: {
     fontSize: '20px',

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import authService from '../services/authService';
 
-export default function Register({ onRegister, switchToLogin }) {
+const Register = memo(({ onRegister, switchToLogin }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,7 +15,7 @@ export default function Register({ onRegister, switchToLogin }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
@@ -51,19 +51,19 @@ export default function Register({ onRegister, switchToLogin }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [formData, onRegister]);
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
+  const handleChange = useCallback((e) => {
+    setFormData(prev => ({
+      ...prev,
       [e.target.name]: e.target.value
-    });
-  };
+    }));
+  }, []);
 
-  const getRandomAvatar = () => {
+  const getRandomAvatar = useCallback(() => {
     const avatars = ['👤', '👨‍💻', '👩‍💻', '👨‍🎨', '👩‍🎨', '👨‍💼', '👩‍💼', '👨‍🔬', '👩‍🔬', '👨‍🏫', '👩‍🏫'];
     return avatars[Math.floor(Math.random() * avatars.length)];
-  };
+  }, []);
 
   return (
     <div style={styles.container}>
@@ -188,7 +188,9 @@ export default function Register({ onRegister, switchToLogin }) {
       </div>
     </div>
   );
-}
+});
+
+export default Register;
 
 const styles = {
   container: {
